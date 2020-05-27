@@ -1,5 +1,7 @@
-//#include <RemoteLog.h>
+#include <RemoteLog.h>
 #import "MediaRemote.h"
+
+#define kBundlePath @"/Library/Application Support/ApolloBundle.bundle"
 
 @interface SBMediaController
 -(BOOL)isPlaying;
@@ -9,10 +11,10 @@
 -(BOOL)_isVisible;
 @end
 
-@interface UIView (Apollo)
+/*@interface UIView (Apollo)
 @property (nonatomic, assign, readwrite) CGPoint center;
 -(void)pan;
-@end
+@end*/
 
 @interface apolloViewController : UIViewController
 @property (nonatomic, assign) UIButton *playButton;
@@ -22,13 +24,15 @@
 -(void)apolloNextButtonPressed;
 -(void)scheduleDismissWindow;
 -(void)dismissWindow;
+-(void)move:(UIPanGestureRecognizer *)recognizer;
 @end
 
 static UIButton *playButton;
 static UIButton *nextButton;
 static UIButton *previousButton;
+static UIImage *playImg;
+static UIImage *pauseImg;
 
-static UIPanGestureRecognizer *gesture;
 
 static bool wasPlaying = false;
 static bool isCurrentlyPlaying = false;
@@ -40,7 +44,6 @@ static NSTimer *dismissTimer;
 float apollowViewWidth = 250;
 float apollowViewHeight = 125;
 
-
 static void createApolloWindow() {
   if (apolloWindow == nil) {
     apolloWindow = [[UIWindow alloc] initWithFrame:CGRectMake((([UIScreen mainScreen].bounds.size.width)/2) - apollowViewWidth/2, (([UIScreen mainScreen].bounds.size.height)/2) - apollowViewHeight/2, apollowViewWidth, apollowViewHeight)];
@@ -49,34 +52,67 @@ static void createApolloWindow() {
     apolloWindow.rootViewController = viewController;
     UIView *apolloView = [[UIView alloc] initWithFrame:apolloWindow.frame];
     apolloView.layer.cornerRadius = 5;
-    apolloView.alpha = 0.75;
+    apolloView.alpha = 1;
     apolloView.layer.masksToBounds = true;
-    apolloView.backgroundColor = [UIColor redColor];
+    apolloView.backgroundColor = [UIColor clearColor];
+
+    UIVisualEffect *blurEffect;
+    // wont change on the fly, but dismissing/invoking the player again should refresh it
+    // right, we can add another method to do it on the fly
+    if (apolloWindow.traitCollection.userInterfaceStyle == UIUserInterfaceStyleLight) {
+      blurEffect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleLight];
+    } else if (apolloWindow.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) {
+      blurEffect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleDark];
+    }
+    UIVisualEffectView *visualEffectView;
+    visualEffectView = [[UIVisualEffectView alloc] initWithEffect:blurEffect];
+    visualEffectView.frame = apolloView.bounds;
+    [apolloView addSubview:visualEffectView];
     viewController.view = apolloView;
+
+    NSBundle *bundle = [[NSBundle alloc] initWithPath:kBundlePath];
+    NSString *playImgPath = [bundle pathForResource:@"play" ofType:@"png"];
+    playImg = [UIImage imageWithContentsOfFile:playImgPath];
+
+    NSString *pauseImgPath = [bundle pathForResource:@"pause" ofType:@"png"];
+    pauseImg = [UIImage imageWithContentsOfFile:pauseImgPath];
+
+    NSString *nextImgPath = [bundle pathForResource:@"next" ofType:@"png"];
+    UIImage *nextImg = [UIImage imageWithContentsOfFile:nextImgPath];
+
+    NSString *previousImgPath = [bundle pathForResource:@"previous" ofType:@"png"];
+    UIImage *previousImg = [UIImage imageWithContentsOfFile:previousImgPath];
+
     UIButton *playButton = [UIButton buttonWithType:UIButtonTypeSystem];
     if (isCurrentlyPlaying) {
-      [playButton setTitle:@"Pause" forState:UIControlStateNormal];
+      [playButton setImage:pauseImg forState:UIControlStateNormal];
+      RLog(@"setting pauseImg");
       [playButton addTarget:viewController action:@selector(apolloPauseButtonPressed) forControlEvents:UIControlEventTouchUpInside];
     } else {
-      [playButton setTitle:@"Play" forState:UIControlStateNormal];
+      [playButton setImage:playImg forState:UIControlStateNormal];
+      RLog(@"setting playImg");
       [playButton addTarget:viewController action:@selector(apolloPlayButtonPressed) forControlEvents:UIControlEventTouchUpInside];
     }
     playButton.frame = CGRectMake((apollowViewWidth/2)-15, (apollowViewHeight/2)-15, 30.0, 30.0);
-    [playButton sizeToFit];
+    [[playButton imageView] setContentMode:UIViewContentModeScaleAspectFit];
+    playButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentFill;
+    playButton.contentVerticalAlignment = UIControlContentVerticalAlignmentFill;
 
     UIButton *nextButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [nextButton setTitle:@"Next" forState:UIControlStateNormal];
+    [nextButton setImage:nextImg forState:UIControlStateNormal];
     [nextButton addTarget:viewController action:@selector(apolloNextButtonPressed) forControlEvents:UIControlEventTouchUpInside];
     nextButton.frame = CGRectMake((apollowViewWidth/2)+30, (apollowViewHeight/2)-15, 30.0, 30.0);
-    [nextButton sizeToFit];
+    nextButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentFill;
+    nextButton.contentVerticalAlignment = UIControlContentVerticalAlignmentFill;
 
     UIButton *previousButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [previousButton setTitle:@"Previous" forState:UIControlStateNormal];
+    [previousButton setImage:previousImg forState:UIControlStateNormal];
     [previousButton addTarget:viewController action:@selector(apolloPreviousButtonPressed) forControlEvents:UIControlEventTouchUpInside];
     previousButton.frame = CGRectMake((apollowViewWidth/2)-70, (apollowViewHeight/2)-15, 30.0, 30.0);
-    [previousButton sizeToFit];
+    previousButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentFill;
+    previousButton.contentVerticalAlignment = UIControlContentVerticalAlignmentFill;
 
-    gesture = [[UIPanGestureRecognizer alloc] initWithTarget:viewController.view action:@selector(pan)];
+    UIPanGestureRecognizer *gesture = [[UIPanGestureRecognizer alloc] initWithTarget:viewController action:@selector(move:)];
     [viewController.view addGestureRecognizer:gesture];
 
     [viewController.view addSubview:playButton];
@@ -120,29 +156,21 @@ static void removeApolloWindow() {
   }
 }
 
-@implementation UIView (Apollo)
--(void)pan {
-  CGPoint point = [gesture locationInView:self];
-  self.center = point;
-}
-@end
-
 @implementation apolloViewController
-
+-(void)move:(UIPanGestureRecognizer *)recognizer {
+  CGPoint point = [recognizer locationInView:self.view];
+  self.view.center = point;
+}
 -(void)apolloPlayButtonPressed {
-  //RLog(@"Play button pressed");
   MRMediaRemoteSendCommand(kMRTogglePlayPause, 0);
 }
 -(void)apolloPauseButtonPressed {
-  //RLog(@"Pause button pressed");
   MRMediaRemoteSendCommand(kMRTogglePlayPause, 0);
 }
 -(void)apolloNextButtonPressed {
-  //RLog(@"Next button pressed");
   MRMediaRemoteSendCommand(kMRNextTrack, 0);
 }
 -(void)apolloPreviousButtonPressed {
-  //RLog(@"Previous button pressed");
   MRMediaRemoteSendCommand(kMRPreviousTrack, 0);
 }
 
@@ -165,10 +193,12 @@ static void removeApolloWindow() {
   %orig;
   if ([self isPlaying]) {
     isCurrentlyPlaying = true;
-    // change text to pause
-  } else {
+    [playButton setImage:pauseImg forState:UIControlStateNormal];
+    RLog(@"setting pauseImg");
+  }else {
     isCurrentlyPlaying = false;
-    // change text to play
+    [playButton setImage:playImg forState:UIControlStateNormal];
+    RLog(@"setting playImg");
   }
   if ([self isPlaying] && wasPlaying == false) {
     wasPlaying = true;
