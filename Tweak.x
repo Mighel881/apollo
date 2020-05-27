@@ -89,18 +89,18 @@ static void createApolloWindow() {
       animations:^{
         apolloWindow.alpha = 1.0;
       }
-      completion:^(BOOL finished){
+      completion:^(BOOL finished) {
       }
     ];
   } else {
-    if(![apolloWindow _isVisible]){
+    if(![apolloWindow _isVisible]) {
       [apolloWindow setHidden:NO];
       apolloWindow.alpha = 0.0;
       [UIView animateWithDuration:0.3f
         animations:^{
           apolloWindow.alpha = 1.0;
         }
-        completion:^(BOOL finished){
+        completion:^(BOOL finished) {
         }
       ];
     }
@@ -161,7 +161,7 @@ static void removeApolloWindow() {
 
 
 %hook SBMediaController
--(void)setNowPlayingInfo:(id)arg1{
+-(void)setNowPlayingInfo:(id)arg1 {
   %orig;
   if ([self isPlaying]) {
     isCurrentlyPlaying = true;
