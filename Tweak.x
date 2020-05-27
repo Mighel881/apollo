@@ -1,4 +1,4 @@
-#include <RemoteLog.h>
+//#include <RemoteLog.h>
 #import "MediaRemote.h"
 
 @interface SBMediaController
@@ -7,6 +7,11 @@
 
 @interface UIWindow (Apollo)
 -(BOOL)_isVisible;
+@end
+
+@interface UIView (Apollo)
+@property (nonatomic, assign, readwrite) CGPoint center;
+-(void)pan;
 @end
 
 @interface apolloViewController : UIViewController
@@ -19,14 +24,11 @@
 -(void)dismissWindow;
 @end
 
-/*@interface UIButton (Apollo)
--(void)apolloPlayButtonPressed;
--(void)apolloPauseButtonPressed;
-@end*/
-
 static UIButton *playButton;
 static UIButton *nextButton;
 static UIButton *previousButton;
+
+static UIPanGestureRecognizer *gesture;
 
 static bool wasPlaying = false;
 static bool isCurrentlyPlaying = false;
@@ -74,6 +76,9 @@ static void createApolloWindow() {
     previousButton.frame = CGRectMake((apollowViewWidth/2)-70, (apollowViewHeight/2)-15, 30.0, 30.0);
     [previousButton sizeToFit];
 
+    gesture = [[UIPanGestureRecognizer alloc] initWithTarget:viewController.view action:@selector(pan)];
+    [viewController.view addGestureRecognizer:gesture];
+
     [viewController.view addSubview:playButton];
     [viewController.view addSubview:nextButton];
     [viewController.view addSubview:previousButton];
@@ -115,22 +120,29 @@ static void removeApolloWindow() {
   }
 }
 
+@implementation UIView (Apollo)
+-(void)pan {
+  CGPoint point = [gesture locationInView:self];
+  self.center = point;
+}
+@end
+
 @implementation apolloViewController
 
 -(void)apolloPlayButtonPressed {
-  RLog(@"Play button pressed");
+  //RLog(@"Play button pressed");
   MRMediaRemoteSendCommand(kMRTogglePlayPause, 0);
 }
 -(void)apolloPauseButtonPressed {
-  RLog(@"Pause button pressed");
+  //RLog(@"Pause button pressed");
   MRMediaRemoteSendCommand(kMRTogglePlayPause, 0);
 }
 -(void)apolloNextButtonPressed {
-  RLog(@"Next button pressed");
+  //RLog(@"Next button pressed");
   MRMediaRemoteSendCommand(kMRNextTrack, 0);
 }
 -(void)apolloPreviousButtonPressed {
-  RLog(@"Previous button pressed");
+  //RLog(@"Previous button pressed");
   MRMediaRemoteSendCommand(kMRPreviousTrack, 0);
 }
 
@@ -173,42 +185,3 @@ static void removeApolloWindow() {
   }
 }
 %end
-
-/*
-%hook SpringBoard
--(void)applicationDidFinishLaunching:(id)arg1 {
-    %orig;
-    createApolloWindow();
-
-}
-%end
-*/
-
-
-
-
-
-
-//if (uiview.superview == nil) { //[window isKeyWindow] == YES //resignKeyWindow
-// make viewº
-//} else {
-// [uiview removeFromSuperview];
-//}
-
-
-// when sb loads
-// add UIWindow
-// add uiview as a subview to the window
-
-// example
-/*
-%hook SpringBoard
--(void)applicationDidFinishLaunching:(id)arg1 {
-    %orig;
-
-    iCrazeWILDUIWindow *window = [[UIWindow alloc] initWithFrame:CGRectMake((([UIScreen mainScreen].bounds.size.width)/2), 1150, 50, 50)];
-    window.windowLevel = UIWindowLevelAlert;
-    [window makeKeyAndVisible];
-}
-%end
-*/
